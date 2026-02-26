@@ -1,0 +1,409 @@
+{
+  "name": "BerlinCultureWorkflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1552,
+        -1264
+      ],
+      "id": "a772457f-879f-480f-a91f-e75650aae0a2",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/scout",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.details_url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        320,
+        -640
+      ],
+      "id": "677bd1ca-4c5e-4798-b6a0-d4cfe1068d2b",
+      "name": "Mastra Bridge Agent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fc1bd8bc-8172-4cba-886e-f1021ec3e18e",
+              "leftValue": "={{ $json.Decision.trim() }}",
+              "rightValue": "=Approve",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        -640
+      ],
+      "id": "b5ccd99e-8b63-45c1-a0c3-fdc08338e4c6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -32,
+        -784
+      ],
+      "id": "b2d22072-e480-48b8-ac39-4ee30d44d397",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "Referer",
+              "value": "https://www.google.com/"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -768,
+        -1008
+      ],
+      "id": "429405d7-513b-4c62-b3a9-07c154f0d947",
+      "name": "Fetch The Berliner"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n\n  { json: { url: \"https://www.berlin.de/events/volksfeste/\", category: \"FestivalEvents\" } },\n\n\n { json: { url: \"https://www.berlin.de/ausstellungen/erlebnisausstellungen/\", category: \"ExhibitionEvents\" } },\n\n\n    \n  { json: { url: \"https://www.berlin.de/en/events/food-events/\", category: \"FoodEvents\" } }\n  \n  \n  \n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        -1264
+      ],
+      "id": "8017ca39-2c29-43f0-9218-552cfa8d17c5",
+      "name": "URL Source"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "dataPropertyName": "={{ $json.data ? 'data' : '' }}",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "event_text",
+              "cssSelector": "article.modul-teaser",
+              "returnArray": true
+            },
+            {
+              "key": "details_url",
+              "cssSelector": "article.modul-teaser h3.title a",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        -1008
+      ],
+      "id": "4f3e9d47-f3e0-42fe-8ee7-841a7b93f9ae",
+      "name": "Extract Headlines",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1024,
+        -1152
+      ],
+      "id": "98e935b1-ceb1-4b7c-a8e9-b6c9288ff547",
+      "name": "Loop Over URLs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const category = $node[\"URL Source\"].json.category; \nconst eventTexts = $input.all()[0].json.event_text;\nconst eventUrls = $input.all()[0].json.details_url;\n\nconst baseUrl = \"https://www.berlin.de\";\n\nreturn eventTexts.map((text, index) => {\n  let rawUrl = eventUrls[index] || \"\";\n  \n  // Clean the URL: if it starts with /, add the domain. \n  // If it already starts with http, leave it alone.\n  const formattedUrl = rawUrl.startsWith('/') \n    ? `${baseUrl}${rawUrl}` \n    : rawUrl;\n\n  return {\n    json: {\n      event_text: text.trim(),\n      collection: category,\n      details_url: formattedUrl\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        -1008
+      ],
+      "id": "c33fca26-ece1-414b-b4d6-6fe6d66297e3",
+      "name": "Cleaning Input"
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "=Review Berlin Event Intel",
+        "formDescription": "=### 📝 Event Details\n**Event:** {{ $node[\"Mastra Bridge Agent\"].json.data.eventName }}\n**Venue:** {{ $node[\"Mastra Bridge Agent\"].json.data.venueName }}\n**District:** {{ $node[\"Mastra Bridge Agent\"].json.data.district }}\n\n### 🎨 Vibes & Scoring\n**Vibes:** {{ $node[\"Mastra Bridge Agent\"].json.data.vibeProfile.join(', ') }}\n**Vibe Score:** {{ $node[\"Mastra Bridge Agent\"].json.eval_score * 100 }}\n\n### 📂 Metadata\n**Collection:** {{ $node[\"Loop Over Items\"].json.collection }}\n**Source URL:** {{ $node[\"Loop Over Items\"].json.details_url }}\n\n---\n### 📖 Summary\n{{ $node[\"Mastra Bridge Agent\"].json.data.summary }}",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Decision",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Approve"
+                  },
+                  {
+                    "option": "Reject"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        576,
+        -640
+      ],
+      "id": "a8368a87-6c5f-41ca-91f1-7dbd4dc1e909",
+      "name": "Wait-Form(HIDL)",
+      "webhookId": "e2009a0e-af9b-414b-920e-3f6b5e1a5f77"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.baserow.io/api/database/rows/table/853567/?user_field_names=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"Event\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.eventName }}\",\n  \"Summary\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.summary }}\",\n  \"District\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.district }}\",\n  \"Venue\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.venueName }}\",\n  \"VibeScore\": {{ ($node[\"Mastra Bridge Agent\"].json.eval_score || 0) * 100 }},\n  \"VibeProfile\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.vibeProfile ? $node[\"Mastra Bridge Agent\"].json.data.vibeProfile.join(', ') : 'General' }}\",\n  \"Collection\": \"{{ $node[\"Loop Over Items\"].json.collection }}\",\n  \"URL\": \"{{ $node[\"Loop Over Items\"].json.details_url }}\",\n  \"HIDLStatus\": \"Approved\",\n  \"QualityScore\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.quality_score || '0.0' }}\",\n  \"AuditReason\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.quality_reason || 'N/A' }}\",\n  \"DeepEvalAuditStatus\": \"{{ $node[\"Mastra Bridge Agent\"].json.data.quality_status || 'unverified' }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1200,
+        -544
+      ],
+      "id": "c7801eed-17e7-4654-9733-359b5ec586d2",
+      "name": "Baserow Insert",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZzhNUv0KMOz97ezT",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "URL Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mastra Bridge Agent": {
+      "main": [
+        [
+          {
+            "node": "Wait-Form(HIDL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Baserow Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over URLs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mastra Bridge Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch The Berliner": {
+      "main": [
+        [
+          {
+            "node": "Extract Headlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URL Source": {
+      "main": [
+        [
+          {
+            "node": "Loop Over URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Headlines": {
+      "main": [
+        [
+          {
+            "node": "Cleaning Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over URLs": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Fetch The Berliner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleaning Input": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait-Form(HIDL)": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baserow Insert": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0d265f5a-1610-41d5-9d16-798f6f1508d1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "465b80bfbe2318a0a93a44a96f82a75bbdbe2bfb4c1a15209c569882ea4bd80d"
+  },
+  "id": "tsi5SygOGjuhjj7j",
+  "tags": []
+}
