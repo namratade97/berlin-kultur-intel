@@ -7,7 +7,7 @@ from qdrant_client.models import PointStruct
 from litellm import embedding
 
 BASEROW_TOKEN = os.environ.get("BASEROW_TOKEN")
-BASEROW_TABLE_ID = "853567"
+BASEROW_TABLE_ID = "baserow_table_id_here"  # Replace with your actual Baserow table ID
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "berlin_events"
 
@@ -17,7 +17,6 @@ client = QdrantClient(url=QDRANT_URL)
 # client.delete_collection(collection_name="berlin_events")
 
 async def get_embedding(text: str):
-    """Same logic as your original vector_store.py"""
     try:
         response = embedding(
             model="gemini/gemini-embedding-001",

@@ -72,7 +72,33 @@ This project demonstrates proficiency across the following modern AI engineering
 
 ## Step-by-Step Deployment Guide
 
-### 1. Infrastructure Initialization
+
+### 1. Initial Setup
+```bash
+git clone https://github.com/namratade97/berlin-kultur-intel.git
+cd berlin-kultur-intel
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cd frontend && npm install
+cd ../my-mastra-app && npm install
+```
+Also recommended to create a `.env` file declaring the API keys.
+
+```
+GROQ_API_KEY=xxx
+GOOGLE_API_KEY=xxx
+OPENROUTER_API_KEY=xxx
+CEREBRAS_API_KEY=xxx
+SAMBANOVA_API_KEY=xxx
+OPENAI_API_KEY=xxx
+BASEROW_TOKEN=xxx
+TAVILY_API_KEY=xxx
+
+```
+
+
+### 2. Infrastructure Initialization
 
 Start the core databases. This ensures **Qdrant (Vector DB)** are ready for the pipeline. Run this command from project's root folder:
 
@@ -80,27 +106,27 @@ Start the core databases. This ensures **Qdrant (Vector DB)** are ready for the 
 docker-compose up -d
 ```
 
-### 2. LLM Proxy Gateway
+### 3. LLM Proxy Gateway
 Start **LiteLLM** to manage our multi-model fallbacks. This allows the system to switch providers if one hits a rate limit.
 
 ```
 python -m dotenv run -- litellm --config litellm_config.yaml --port 4000 --drop_params
 ```
-### 3. Agentic Validation Engine
+### 4. Agentic Validation Engine
 
 Launch the Python Backend. This server hosts the **LangGraph** workflow and **CrewAI** specialists that perform fact checking and polishing content. This also evaluates the validity the generated content with **DeepEval**.
 
 ```
 cd agents_python && python main.py
 ```
-### 4. Mastra Signal Processor
+### 5. Mastra Signal Processor
 Now bring the TypeScript Scout Agent online. This agent is optimized for scraping and parsing raw cultural data from the web.
 
 ```
 cd my_mastra_app && npx tsx src/server.ts
 ```
 
-### 5. Data Pipeline (n8n)
+### 6. Data Pipeline (n8n)
 Start n8n to run the orchestration workflow.
 
 ```
@@ -111,16 +137,24 @@ followed by
 ```
 n8n start
 ```
-Once commands from Step 2-5 are running parallely on four different terminals, at `http://localhost:5678/` the n8n workflow editor should open up.
+Once commands from Step 3-6 are running parallely on four different terminals, at `http://localhost:5678/` the n8n workflow editor should open up.
 
-### 6. Import Workflow for n8n: 
+### 7. Import Workflow for n8n: 
 
 Copy the contents of `n8n/BerlinCultureWorkflow.json` and paste it onto the n8n workspace. It should replicate the following workflow. This workflow acts as the A2A (Agent-to-Agent) bridge, and pushes agent's final response to a [Baserow](https://baserow.io/) table and Qdrant.
 
 **Note:** At 'Wait-Form' node we incorporate a **Human-in-the-loop (HIDL)** strategy, where a form pops up with the agent's answer, and only if approved by the user, that information is stored in our databases. Else we go the next loop element.  
 **Note:** At node "URL Source" three sample websites are provided - which can be modified accordingly.
 
-### 7. Post-Processing & Geofixing
+![n8n workspace](images/n8n.png)
+
+Execute the workflow to get it started.
+
+![agent at work 1](images/agent1.png)
+![agent at work 1](images/agent3.png)
+![agent at work 1](images/agent4.png)
+
+### 8. Post-Processing & Geofixing
 
 We also have a script to import any Baserow table in our Qdrant database.
 Run
@@ -129,14 +163,20 @@ python baserow/sync_baserow_to_qdrant.py
 ```
 **Note:** A sample Baserow table for our schema can be found at `baserow/export - Berlin Culture Pipeline - Grid.json`
 
+![Sample Baserow table](images/baserow.png)
+
+
 We also use the following command to update Qdrant points with latitude and longitude of the event venue, with the help of **Nominatim**.
 
 ```
 python backend/geofix.py
 ```
+
+![Sample Qdrant point](images/qdrant.png)
+
 Once our data is prepared, we move to the following steps:
 
-### 8. GraphQL Backend
+### 9. GraphQL Backend
 
 Host the Strawberry GraphQL playground on port 8000 with the following command:
 
@@ -146,8 +186,12 @@ python backend/main.py
 
 When this service starts, it initializes a hybrid retrieval and analytics layer by syncing structured event metadata from **Qdrant (vector vault)** into a **SQLite archive** for historical querying. The /graphql endpoint exposes two core capabilities: **semantic search** via **embedding-based vector retrieval** and an **agentic question-answering pipeline**. Incoming queries are first embedded using Gemini embeddings and matched against Qdrant; depending on detected intent, the system dynamically routes the request either through a **RAG generation path (context-grounded answer synthesis)** or a **Text2SQL analytical path (LLM-generated SQLite queries over historical data)**. All generation requests pass through a **LiteLLM** fallback chain across multiple providers, ensuring resilience against rate limits while maintaining low-latency responses for the React frontend.
 
+![Strawberry showing Agent results 1](images/graphql1.png)
+![Strawberry showing Agent results 2](images/graphql2.png)
 
-### 9. Launch the Map
+
+
+### 10. Launch the Map
 
 With `backend/main.py` running, from another terminal launch the **React** frontend.
 ```
@@ -156,4 +200,4 @@ cd frontend && npm start
 
 Once launched, users can type their queries into the sidebar search area and see Agent's answer with relevant matches pulled from our database. The relevant locations are also pointed on the map with interactive pins.
 
-(images/map.png)
+![Map showing Agent results](images/map.png)
